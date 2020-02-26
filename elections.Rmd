@@ -8,6 +8,8 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 
+library(rstanarm)
+library(skimr)
 library(tidyverse)
 
 ```
@@ -21,9 +23,95 @@ library(tidyverse)
 load("nes.rda")
 
 # select the variables we talked about
+# change it to tibble so that it prints out nicely (unlike data frames)
+# you can run summary, skim (from skimr), glimpse to look at data
+# drop rows with na's using drop_na (a bunch of partyid rows are missing and a 
+# bunch of real_ideo rows missing esp in early years)
 
-nes %>% 
-  select(year, partyid7, real_ideo, race_adj, age_discrete, educ1, female, income)
+nes_tibble <- nes %>% 
+  select(year, partyid7, real_ideo, race_adj, age_discrete, educ1, female, income) %>%
+  as_tibble() %>%
+  drop_na() %>%
+  
+  # if something is not a number don't keep it a number in your data!!!
+  # so we will change female and race to a factor
+  
+  mutate(gender = as.factor(ifelse(female == 1, "female", "non-female"))) %>%
+  
+  # 1 is white, 2 is black, 1.5 is other in the race column, so create
+  # a factor variable
+  
+  mutate(race = as.factor(case_when(race_adj == 1 ~ "white",
+                                    race_adj == 2 ~ "black",
+                                    race_adj == 1.5 ~ "other")))
 
 ```
+
+```{r creating model for gender, cache = TRUE}
+
+# run a regression to explain partyid by female
+
+fit1 <- stan_glm(partyid7 ~ gender, data = nes_tibble, refresh = FALSE)
+
+print(fit1)
+
+# sigma is the residual standard deviation of the regression 
+
+# it tells us that the true value of our predicted value from the intercept and coef
+# we got will be within +/- the sigma value 68% of the time and within +/- two times
+# the sigma value 95% of the time
+
+```
+
+```{r predicting using our model 1}
+
+predictions <- nes_tibble %>%
+  select(year, partyid7, gender, race, real_ideo) %>%
+  
+  # create new column for predicted party based on gender
+  
+  mutate(predicted_bygender = predict(fit1, newdata = nes_tibble))
+
+```
+
+```{r predicting partyid by race}
+
+# run a regression to explain partyid by race 
+
+fit2 <- stan_glm(partyid7 ~ race, data = nes_tibble, refresh = FALSE)
+
+print(fit2)
+
+# intercept 2.1 means if race = black, median partyid should be 2.1
+# raceother 1.3 means a other race person is on average 1.3 higher on partyid scale than black (3.4)
+# racewhite 1.9 means a white persion is on average 1.9 higher on partyid scale than black (4)
+
+# the MAD_SD (measure of uncertainty ) of .1 is low compared to 2.1/1.3/1.9 so that indicates 
+# not too much uncertainty for these variable - you would expect the real mean/median to be 
+# within 2 standard deviations (.1 *2 = .2) of these coef values 95% of the time.... ?
+# i think that is the correct interpreation of the MAD_SD
+
+predictions <- predictions %>%
+  
+  # create new column for predicted party based on race
+  
+  mutate(predicted_byrace = predict(fit2, newdata = nes_tibble))
+
+```
+
+```{r predict partyid by ideology}
+
+fit3 <- stan_glm(partyid7 ~ real_ideo, data = nes_tibble, refresh = FALSE)
+
+print(fit3)
+
+predictions <- predictions %>%
+  mutate(predicted_byideo = predict(fit3, newdata = nes_tibble))
+
+predictions
+
+```
+
+
+
 
