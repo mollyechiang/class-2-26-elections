@@ -1,0 +1,29 @@
+---
+title: "Election Data"
+author: "Molly Chiang"
+date: "2/26/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(tidyverse)
+
+```
+
+
+```{r load data}
+
+# load the rda object, R's natural way of storing data
+# once you load the rda object it automatically brings the tibble in for you
+
+load("nes.rda")
+
+# select the variables we talked about
+
+nes %>% 
+  select(year, partyid7, real_ideo, race_adj, age_discrete, educ1, female, income)
+
+```
+
